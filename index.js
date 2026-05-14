@@ -1,7 +1,6 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
-require('dotenv').config();
 
 app.use(cors());
 app.use(express.static('public'));
@@ -11,41 +10,42 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html');
 });
 
-// VARIABLES PARA GUARDAR DATOS (TEMPORAL)
+// BASE DE DATOS EN MEMORIA (No requiere configuración)
 let users = [];
 let exercises = [];
 
-// 1. Crear usuario
+// Crear usuario
 app.post('/api/users', (req, res) => {
   const newUser = {
     username: req.body.username,
-    _id: Date.now().toString() // Genera un ID único basado en el tiempo
+    _id: "id_" + Math.random().toString(36).substr(2, 9)
   };
   users.push(newUser);
   res.json(newUser);
 });
 
-// 2. Obtener usuarios
+// Listar usuarios
 app.get('/api/users', (req, res) => {
   res.json(users);
 });
 
-// 3. Agregar ejercicio
+// Agregar ejercicio
 app.post('/api/users/:_id/exercises', (req, res) => {
   const id = req.params._id;
   const { description, duration, date } = req.body;
   const user = users.find(u => u._id === id);
 
-  if (!user) return res.send("User not found");
+  if (!user) return res.json({ error: "User not found" });
 
+  const exerciseDate = date ? new Date(date).toDateString() : new Date().toDateString();
+  
   const exercise = {
-    user_id: id,
     description,
     duration: Number(duration),
-    date: date ? new Date(date).toDateString() : new Date().toDateString()
+    date: exerciseDate
   };
 
-  exercises.push(exercise);
+  exercises.push({ ...exercise, user_id: id });
 
   res.json({
     _id: user._id,
@@ -56,37 +56,24 @@ app.post('/api/users/:_id/exercises', (req, res) => {
   });
 });
 
-// 4. Obtener logs
+// Ver Logs
 app.get('/api/users/:_id/logs', (req, res) => {
-  const id = req.params._id;
-  const user = users.find(u => u._id === id);
+  const user = users.find(u => u._id === req.params._id);
+  if (!user) return res.json({ error: "User not found" });
+
+  let log = exercises.filter(e => e.user_id === user._id);
   
-  let userExercises = exercises.filter(e => e.user_id === id);
-  
-  // Filtros opcionales (from, to, limit)
   const { from, to, limit } = req.query;
-  if (from) {
-    const fromDate = new Date(from);
-    userExercises = userExercises.filter(e => new Date(e.date) >= fromDate);
-  }
-  if (to) {
-    const toDate = new Date(to);
-    userExercises = userExercises.filter(e => new Date(e.date) <= toDate);
-  }
-  if (limit) {
-    userExercises = userExercises.slice(0, Number(limit));
-  }
+  if (from) log = log.filter(e => new Date(e.date) >= new Date(from));
+  if (to) log = log.filter(e => new Date(e.date) <= new Date(to));
+  if (limit) log = log.slice(0, Number(limit));
 
   res.json({
     username: user.username,
-    count: userExercises.length,
+    count: log.length,
     _id: user._id,
-    log: userExercises.map(e => ({
-      description: e.description,
-      duration: e.duration,
-      date: e.date
-    }))
+    log: log.map(({ description, duration, date }) => ({ description, duration, date }))
   });
 });
 
-app.listen(3000, () => console.log('Servidor listo en el puerto 3000'));
+app.listen(3000, () => console.log('¡SERVIDOR LISTO EN PUERTO 3000!'));
